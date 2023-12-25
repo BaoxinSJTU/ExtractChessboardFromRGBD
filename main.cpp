@@ -68,7 +68,7 @@ void fill_chessboard(cv::Mat& src, std::vector<cv::Point2f>& corners){
         }
     }
 }
-void target_detection(cv::Mat& src){
+void target_detection(cv::Mat& src, cv::Mat& chessboard_partial){
     cv::Size pattern_size(7, 4);
     cv::Mat gray;
     cv::cvtColor(src, gray, cv::COLOR_BGR2GRAY);
@@ -83,12 +83,25 @@ void target_detection(cv::Mat& src){
         spdlog::error("can not found chessboard corners!");
         return;
     }
-    // spdlog::info("Found chessboard corner!");
+
+    
+
+    std::vector<cv::Point2f> corners_bounding;
+    corners_bounding.push_back(corners.at(0));
+    corners_bounding.push_back(corners.at(PATTERN_WIDTH - 1));
+    corners_bounding.push_back(corners.at(PATTERN_WIDTH*(PATTERN_HEIGHT-1) + PATTERN_WIDTH - 1));
+    corners_bounding.push_back(corners.at(PATTERN_WIDTH*(PATTERN_HEIGHT-1)));
+
+    cv::Mat mask = cv::Mat::zeros(src.size(), CV_8UC1);
+    std::vector<cv::Point> polyPoints;
+    for(const auto& corner : corners_bounding)
+        polyPoints.push_back(corner);
+    cv::fillConvexPoly(mask, polyPoints.data(), polyPoints.size(), cv::Scalar(255));
+    src.copyTo(chessboard_partial, mask);
+
     cv::drawChessboardCorners(src, cv::Size(7, 6), cv::Mat(corners), pattern_found);
-    // std::vector<cv::Point2f> poly1{corners.at(0), corners.at(1), corners.at(8), corners.at(7)};
+
     fill_chessboard(src, corners);
-    // std::vector<cv::Point2f> poly2{corners.at(2), corners.at(3), corners.at(10), corners.at(9)};
-    // fill_chessboard(src, poly2, color_vec.at(1));
 }
 
 int main(int argc, char** argv){
@@ -153,12 +166,13 @@ int main(int argc, char** argv){
         depth_image = std::shared_ptr<open3d::geometry::Image>(&rgbd.depth_, [](open3d::geometry::Image*){});
         color_image = std::shared_ptr<open3d::geometry::Image>(&rgbd.color_, [](open3d::geometry::Image*){});
 
-        cv::Mat temp_cv;
+        cv::Mat temp_cv, chessboard;
         open3d::geometry::Image temp_o3d;
+        std::vector<std::vector<cv::Point2f>> chessboard_points;
 
         temp_cv = open3d2cv(*color_image);
-        target_detection(temp_cv);
-        temp_o3d = cv2open3d(temp_cv);
+        target_detection(temp_cv, chessboard);
+        temp_o3d = cv2open3d(chessboard);
         color_image = std::shared_ptr<open3d::geometry::Image>(&temp_o3d, [](open3d::geometry::Image*){});
 
         auto pcd_t = open3d::t::geometry::PointCloud::CreateFromRGBDImage(rgbd_t, sensor_intrinsic, open3d::core::Tensor::Eye(4, open3d::core::Float32, ((open3d::core::Device)("CPU:0"))),
