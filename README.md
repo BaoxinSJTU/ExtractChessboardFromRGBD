@@ -4,3 +4,4 @@
 * Visualize data via Open3D visualization.
 
 ![Corner Detection](https://github.com/BaoxinSJTU/myPicture/blob/main/CornerDetection.png)
+![Extract Chessboard Region](https://github.com/BaoxinSJTU/myPicture/blob/main/CornerDetection_1.png)
