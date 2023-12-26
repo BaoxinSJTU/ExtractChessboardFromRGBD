@@ -9,9 +9,9 @@ find_package(Open3D REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(CUDA REQUIRED)
 find_package(OpenCV REQUIRED)
-INCLUDE_DIRECTORIES( ${OpenCV_INCLUDE_DIRS} )
+INCLUDE_DIRECTORIES( ${OpenCV_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR})
 
-add_executable(${PROJECT_NAME} main.cpp)
+add_executable(${PROJECT_NAME} main.cpp ROIExtract.cpp ROIExtract.h)
 
 # Link librealsense2 to the target
 target_link_libraries(${PROJECT_NAME} ${realsense2_LIBRARY} spdlog::spdlog Open3D::Open3D ${CUDA_LIBRARIES} ${OpenCV_LIBS})
