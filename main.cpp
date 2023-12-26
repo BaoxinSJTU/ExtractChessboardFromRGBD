@@ -26,6 +26,39 @@ cv::Mat open3d2cv(const open3d::geometry::Image& src){
     int type = src.num_of_channels_ == 1? CV_16UC1 : CV_8UC3;
     return cv::Mat(src.height_, src.width_, type, (void*)src.data_.data());
 }
+void GetViewofTDepth(open3d::t::geometry::Image& depth){
+    void* data_raw = depth.GetDataPtr();
+    if(depth.GetDtype() == open3d::core::Dtype::UInt16){
+        spdlog::info("depth data format is uint_16!");
+
+        uint16_t* data = reinterpret_cast<uint16_t*> (data_raw);
+        for(int y = 0; y < depth.GetRows(); y++){
+            for(int x = 0; x < depth.GetCols(); x++){
+                spdlog::info("depth value is: {}", static_cast<double>(*(data + y * depth.GetCols() + x)));
+            }
+        }
+    }
+    else{
+        spdlog::info("depth data format is not uint_16!");
+    }
+}
+void MaskDepth(open3d::t::geometry::Image& depth, cv::Mat& mask){
+    void* data_raw = depth.GetDataPtr();
+    if(depth.GetDtype() == open3d::core::Dtype::UInt16){
+        spdlog::info("depth data format is uint_16!");
+
+        uint16_t* data = reinterpret_cast<uint16_t*> (data_raw);
+        for(int y = 0; y < depth.GetRows(); y++){
+            for(int x = 0; x < depth.GetCols(); x++){
+                if(mask.at<uchar>(y, x) == uint8_t(0))
+                    *(data + y * depth.GetCols() + x) = uint16_t(0);
+            }
+        }
+    }
+    else{
+        spdlog::info("depth data format is not uint_16!");
+    }
+}
 open3d::geometry::Image cv2open3d(const cv::Mat& src){
     open3d::geometry::Image ret;
     int bytes_per_channel = src.depth()/2+1;
@@ -68,7 +101,7 @@ void fill_chessboard(cv::Mat& src, std::vector<cv::Point2f>& corners){
         }
     }
 }
-void target_detection(cv::Mat& src, cv::Mat& chessboard_partial){
+void target_detection(cv::Mat& src, cv::Mat& chessboard_partial, cv::Mat& mask){
     cv::Size pattern_size(7, 4);
     cv::Mat gray;
     cv::cvtColor(src, gray, cv::COLOR_BGR2GRAY);
@@ -92,7 +125,7 @@ void target_detection(cv::Mat& src, cv::Mat& chessboard_partial){
     corners_bounding.push_back(corners.at(PATTERN_WIDTH*(PATTERN_HEIGHT-1) + PATTERN_WIDTH - 1));
     corners_bounding.push_back(corners.at(PATTERN_WIDTH*(PATTERN_HEIGHT-1)));
 
-    cv::Mat mask = cv::Mat::zeros(src.size(), CV_8UC1);
+    mask = cv::Mat::zeros(src.size(), CV_8UC1);
     std::vector<cv::Point> polyPoints;
     for(const auto& corner : corners_bounding)
         polyPoints.push_back(corner);
@@ -157,6 +190,7 @@ int main(int argc, char** argv){
     
     while(!flag_exit){
         auto rgbd_t = rs.CaptureFrame(true, true);
+        // GetViewofTDepth(rgbd_t.depth_);
         // auto pcd_t = open3d::t::geometry::PointCloud::CreateFromRGBDImage(rgbd_t, sensor_intrinsic, open3d::core::Tensor::Eye(4, open3d::core::Float32, ((open3d::core::Device)("CPU:0"))),
         //                                                                     1000.f, 15.0f);
         // auto pcd_ = pcd_t.ToLegacy();
@@ -166,12 +200,13 @@ int main(int argc, char** argv){
         depth_image = std::shared_ptr<open3d::geometry::Image>(&rgbd.depth_, [](open3d::geometry::Image*){});
         color_image = std::shared_ptr<open3d::geometry::Image>(&rgbd.color_, [](open3d::geometry::Image*){});
 
-        cv::Mat temp_cv, chessboard;
+        cv::Mat temp_cv, chessboard, mask;
         open3d::geometry::Image temp_o3d;
         std::vector<std::vector<cv::Point2f>> chessboard_points;
 
         temp_cv = open3d2cv(*color_image);
-        target_detection(temp_cv, chessboard);
+        target_detection(temp_cv, chessboard, mask);
+        MaskDepth(rgbd_t.depth_, mask);
         temp_o3d = cv2open3d(chessboard);
         color_image = std::shared_ptr<open3d::geometry::Image>(&temp_o3d, [](open3d::geometry::Image*){});
 
@@ -229,7 +264,12 @@ int main(int argc, char** argv){
         // depth_vis.UpdateRender();
         color_vis.UpdateRender();
         // pcd_vis.UpdateRender();
+
+        flag_exit = true;
     }
     rs.StopCapture();
+    // open3d::visualization::DrawGeometries({pcd});
+    open3d::io::WritePointCloudOption opt;
+    open3d::io::WritePointCloud("../data/pcd/1.pcd", *pcd, opt);
     return 0;
 }
